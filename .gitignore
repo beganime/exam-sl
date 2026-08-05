@@ -8,6 +8,7 @@ staticfiles/
 media/
 firebase-service-account.json
 firebase-service-account-legacy.json
+studentslife-token.json
 *.log
 .idea/
 .vscode/
