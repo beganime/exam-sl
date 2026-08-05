@@ -7,6 +7,7 @@ __pycache__/
 staticfiles/
 media/
 firebase-service-account.json
+firebase-service-account-legacy.json
 *.log
 .idea/
 .vscode/
