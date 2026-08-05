@@ -1,0 +1,7 @@
+{
+  "base_url": "https://students-life.ru/api2/api/v1",
+  "email": "manager@tmmail.ru",
+  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg0MTg4OTkwLCJpYXQiOjE3ODQxODQzNTIsImp0aSI6IjI5ODczMjk5ZjhhYTRmZGJhMzQwZjJmYWQ4NTlhYzE3IiwidXNlcl9pZCI6OTV9.UDaZ7znE70_Qo-mVW-V8UFaCCpLlQB5_aBnFKCKlnvA",
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc4NTM5Njc5MCwiaWF0IjoxNzg0MTg3MTkwLCJqdGkiOiIzNDcyOTQyMWJiY2U0NTBiYjU2MDBjN2U0NjI4NWQxYiIsInVzZXJfaWQiOjk1fQ.HwzA7iDjLJ7Ilsd_6jJH1N4IlMsuCpl10EpS-CcxgEU",
+  "saved_at": "2026-07-16T11:14:17"
+}

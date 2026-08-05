@@ -1,0 +1,26 @@
+http:
+  routers:
+    examsl-http:
+      rule: Host(`exam.stud-life.com`)
+      entryPoints:
+        - http
+      middlewares:
+        - examsl-https-redirect
+      service: examsl
+    examsl-https:
+      rule: Host(`exam.stud-life.com`)
+      entryPoints:
+        - https
+      service: examsl
+      tls:
+        certResolver: letsencrypt
+  middlewares:
+    examsl-https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+  services:
+    examsl:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8001

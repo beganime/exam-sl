@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Уведомления — ExamSL{% endblock %}
+{% block content %}
+<div class="shell page">
+  <section class="page-hero compact-hero"><div><p class="eyebrow">Web push · FCM</p><h1>Всегда <em>вовремя.</em></h1><p class="hero-copy">Подключите этот браузер и проверьте доставку одним тестовым уведомлением.</p></div></section>
+  <section class="push-hero-card">
+    <div class="push-orbit"><span class="push-bell">↗</span><i></i><i></i></div>
+    <div><p class="eyebrow">Этот браузер</p><h2 data-push-title>Уведомления ещё не подключены</h2><p data-push-copy>Разрешите уведомления — токен сохранится в ExamSL и синхронизируется с Students Life API.</p><div class="hero-actions"><button type="button" class="button button-dark" data-enable-push>Разрешить уведомления</button><form method="post" action="{% url 'push-test' %}">{% csrf_token %}<button class="button button-ghost">Тест себе</button></form></div><small data-push-status></small></div>
+  </section>
+  <div class="settings-grid">
+    <section class="settings-card"><header><div><p class="eyebrow">Ваши устройства</p><h2>Браузеры</h2></div><span>{{ devices|length }}</span></header><div class="device-list">{% for device in devices %}<article><div class="device-icon">◎</div><div><strong>{{ device.device_id|default:'Web браузер' }}</strong><span>{% if device.is_active %}Активен{% else %}Отключён{% endif %} · {{ device.updated_at|date:'d.m.Y H:i' }}</span></div><form method="post" action="{% url 'push-delete' device.pk %}">{% csrf_token %}<button aria-label="Отключить">×</button></form></article>{% empty %}<div class="calm-empty"><strong>Нет подключённых устройств</strong><span>Нажмите «Разрешить уведомления» выше.</span></div>{% endfor %}</div></section>
+    <section class="settings-card"><header><div><p class="eyebrow">Клиент Students Life</p><h2>Тестовый push</h2></div></header><p class="muted">Введите имя, логин, телефон, email или ID клиента. ExamSL найдёт клиента в базе Students Life и отправит тест на его связанные браузеры.</p><form class="external-test-form" method="post" action="{% url 'push-test-client' %}">{% csrf_token %}<div class="field"><label for="client_query">Клиент</label><input id="client_query" name="client_query" placeholder="Например, anna или Анна Ахметова" required></div><button class="button button-dark">Найти и отправить →</button></form></section>
+  </div>
+  <section class="settings-card selective-push-card"><header><div><p class="eyebrow">Выборочная проверка</p><h2>Кому отправить тест</h2></div></header><p class="muted">Выберите одного или нескольких менеджеров. Уведомление отправится сразу на все их активные браузеры.</p><form method="post" action="{% url 'push-test' %}">{% csrf_token %}<div class="recipient-picker">{% for manager in push_recipients %}<label><input type="checkbox" name="recipients" value="{{ manager.pk }}"><span><strong>{{ manager.get_full_name|default:manager.username }}</strong><small>{{ manager.username }} · токенов: {{ manager.browser_devices.count }}</small></span></label>{% empty %}<p>Нет активных менеджеров.</p>{% endfor %}</div><button class="button button-dark">Отправить выбранным →</button></form></section>
+  <section class="schedule-explainer"><p class="eyebrow">Автоматическое расписание</p><h2>Три напоминания — <em>без опозданий.</em></h2><div class="schedule-line"><article><span>−1 день</span><strong>08:00</strong><small>Утреннее напоминание</small></article><i></i><article><span>−1 день</span><strong>20:00</strong><small>Вечерняя проверка</small></article><i></i><article><span>До экзамена</span><strong>−30 мин</strong><small>Финальное напоминание</small></article></div></section>
+</div>
+{{ firebase_web_config|json_script:'firebase-config' }}
+{{ fcm_vapid_public_key|json_script:'fcm-vapid-key' }}
+{% endblock %}
+{% block scripts %}<script type="module" src="{% static 'js/push.js' %}"></script>{% endblock %}

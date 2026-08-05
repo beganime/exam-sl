@@ -1,0 +1,3 @@
+{% extends 'base.html' %}
+{% block title %}Удалить экзамен — ExamSL{% endblock %}
+{% block content %}<div class="shell narrow-page"><section class="confirm-card"><p class="eyebrow">Необратимое действие</p><h1>Удалить экзамен?</h1><p>Запись «{{ object }}», комментарии и журнал уведомлений будут удалены.</p><form method="post">{% csrf_token %}<a class="button button-ghost" href="{{ object.get_absolute_url }}">Отмена</a><button class="button button-dark">Удалить</button></form></section></div>{% endblock %}

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}Изменить экзамен{% else %}Новый экзамен{% endif %} — ExamSL{% endblock %}
+{% block content %}
+<div class="shell page form-page">
+  <section class="page-hero compact-hero"><div><p class="eyebrow">{% if object %}Редактирование{% else %}Новая запись{% endif %}</p><h1>{% if object %}Изменить <em>экзамен.</em>{% else %}Добавить <em>экзамен.</em>{% endif %}</h1></div><a class="button button-ghost" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'exam-list' %}{% endif %}">Отмена</a></section>
+  <form method="post" class="exam-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <section class="form-card">
+      <div class="form-section-title"><span>01</span><div><h2>Клиент</h2><p>Основные данные и доступ к экзамену.</p></div></div>
+      <div class="form-grid">
+        {% include 'core/field.html' with field=form.client_full_name %}
+        {% include 'core/field.html' with field=form.client_source %}
+        {% include 'core/field.html' with field=form.client_login %}
+        {% include 'core/field.html' with field=form.client_password %}
+        {% include 'core/field.html' with field=form.client_contacts span=True %}
+      </div>
+    </section>
+    <section class="form-card">
+      <div class="form-section-title"><span>02</span><div><h2>Экзамен</h2><p>Когда, где и по какому предмету.</p></div></div>
+      <div class="form-grid">
+        {% include 'core/field.html' with field=form.exam_at %}
+        {% include 'core/field.html' with field=form.status %}
+        {% include 'core/field.html' with field=form.university %}
+        {% include 'core/field.html' with field=form.subject %}
+        {% include 'core/field.html' with field=form.responsible_manager %}
+        {% include 'core/field.html' with field=form.created_by %}
+        {% include 'core/field.html' with field=form.exam_url span=True %}
+      </div>
+    </section>
+    <section class="form-card">
+      <div class="form-section-title"><span>03</span><div><h2>Связь и уведомления</h2><p>Push уйдут накануне в 08:00 и 20:00, а также за 30 минут до начала.</p></div></div>
+      <div class="notification-note"><strong>Asia/Ashgabat</strong><span>Три системных уведомления создаются автоматически. Дополнительно можно указать произвольное время.</span></div>
+      <div class="form-grid">
+        {% include 'core/field.html' with field=form.custom_notify_at %}
+        <div></div>
+        {% include 'core/field.html' with field=form.external_user_id %}
+        {% include 'core/field.html' with field=form.external_profile_id %}
+        <div class="field span-2 checkbox-field">{{ form.notify_all_managers }}<label for="{{ form.notify_all_managers.id_for_label }}"><strong>{{ form.notify_all_managers.label }}</strong><small>{{ form.notify_all_managers.help_text }}</small></label></div>
+        <div class="field span-2 recipients-field"><label>{{ form.notification_recipients.label }}</label>{{ form.notification_recipients }}{% if form.notification_recipients.errors %}<small class="error">{{ form.notification_recipients.errors|striptags }}</small>{% endif %}</div>
+      </div>
+    </section>
+    <div class="sticky-form-actions"><span>Пароль клиента хранится и показывается открыто по вашему требованию.</span><button class="button button-dark" type="submit">{% if object %}Сохранить изменения{% else %}Создать экзамен{% endif %} →</button></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,1 @@
+<div class="field {% if span %}span-2{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<sup>*</sup>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<small class="error">{{ field.errors|striptags }}</small>{% endif %}</div>

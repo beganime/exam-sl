@@ -1,0 +1,62 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>{% block title %}ExamSL{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% if user.is_authenticated %}
+  <header class="site-header">
+    <div class="shell nav-wrap">
+      <a class="brand" href="{% url 'dashboard' %}" aria-label="ExamSL, на главную">
+        <span class="brand-mark">E</span><span>ExamSL</span>
+      </a>
+      <nav class="desktop-nav" aria-label="Основная навигация">
+        <a class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Обзор</a>
+        <a class="{% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam-list' %}">Экзамены</a>
+        <a class="{% if 'push' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'push-settings' %}">Уведомления</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="search-trigger" type="button" data-search-open aria-label="Открыть поиск">
+          <span aria-hidden="true">⌕</span><span class="search-label">Поиск</span><kbd>⌘ K</kbd>
+        </button>
+        <a class="button button-dark button-small" href="{% url 'exam-create' %}">+ Экзамен</a>
+        <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="avatar" title="Выйти">{{ user.first_name|default:user.username|slice:':1'|upper }}</button></form>
+      </div>
+    </div>
+  </header>
+  {% endif %}
+
+  {% if messages %}
+  <div class="toast-stack" aria-live="polite">
+    {% for message in messages %}<div class="toast {{ message.tags }}">{{ message }}<button type="button" aria-label="Закрыть">×</button></div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <main>{% block content %}{% endblock %}</main>
+
+  {% if user.is_authenticated %}
+  <div class="search-modal" data-search-modal hidden>
+    <div class="search-backdrop" data-search-close></div>
+    <section class="search-panel" role="dialog" aria-modal="true" aria-label="Поиск">
+      <div class="global-search-input"><span>⌕</span><input type="search" data-global-search placeholder="Имя, вуз, предмет, логин, контакт…" autocomplete="off"><button data-search-close>Esc</button></div>
+      <div class="search-results" data-search-results><p class="empty-state">Начните вводить — поиск работает по ExamSL и базе Students Life.</p></div>
+    </section>
+  </div>
+  <nav class="mobile-nav">
+    <a href="{% url 'dashboard' %}">Обзор</a><a href="{% url 'exam-list' %}">Экзамены</a><a href="{% url 'push-settings' %}">Push</a>
+  </nav>
+  <script>window.examSL = { searchUrl: "{% url 'quick-search' %}" };</script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+  {% endif %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

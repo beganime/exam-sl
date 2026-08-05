@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Экзамены — ExamSL{% endblock %}
+{% block content %}
+<div class="shell page spreadsheet-page">
+  <section class="page-hero compact-hero"><div><p class="eyebrow">Единая база</p><h1>Все <em>экзамены.</em></h1></div><a class="button button-dark" href="{% url 'exam-create' %}">+ Добавить экзамен</a></section>
+  <form class="filter-bar" method="get">
+    <div class="filter-search"><span>⌕</span><input type="search" name="q" value="{{ q }}" placeholder="Поиск по любому столбцу…"></div>
+    <select name="status" onchange="this.form.submit()"><option value="">Все статусы</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <button class="button button-ghost button-small">Найти</button>
+  </form>
+  <div class="excel-workbook">
+    <div class="excel-toolbar"><span class="excel-badge">ExamSL</span><strong>Таблица экзаменов</strong><small>{{ paginator.count }} строк</small><span class="excel-hint">Измените ячейки и нажмите Ctrl+Enter или «Сохранить»</span></div>
+    <div class="excel-scroll">
+      <table class="excel-table">
+        <thead><tr><th class="row-number">№</th><th>Дата и время</th><th>ФИО клиента</th><th>Логин</th><th>Пароль</th><th>Вуз</th><th>Предмет</th><th>Откуда</th><th>Контакты</th><th>Ссылка</th><th>Статус</th><th>Ответственный</th><th>Кто добавил</th><th>Получатели</th><th></th></tr></thead>
+        <tbody>{% for exam in exams %}<tr class="editable-row">
+          <td class="row-number"><a href="{{ exam.get_absolute_url }}">{{ forloop.counter0|add:page_obj.start_index }}</a></td>
+          <td><input class="excel-cell excel-date" form="exam-inline-{{ exam.pk }}" type="datetime-local" name="exam_at" value="{{ exam.exam_at|date:'Y-m-d\TH:i' }}"></td>
+          <td><input class="excel-cell" form="exam-inline-{{ exam.pk }}" name="client_full_name" value="{{ exam.client_full_name }}"></td>
+          <td><input class="excel-cell" form="exam-inline-{{ exam.pk }}" name="client_login" value="{{ exam.client_login }}"></td>
+          <td><input class="excel-cell mono" form="exam-inline-{{ exam.pk }}" name="client_password" value="{{ exam.client_password }}"></td>
+          <td><input class="excel-cell" form="exam-inline-{{ exam.pk }}" name="university" value="{{ exam.university }}"></td>
+          <td><input class="excel-cell" form="exam-inline-{{ exam.pk }}" name="subject" value="{{ exam.subject }}"></td>
+          <td><input class="excel-cell" form="exam-inline-{{ exam.pk }}" name="client_source" value="{{ exam.client_source }}"></td>
+          <td><textarea class="excel-cell excel-textarea" form="exam-inline-{{ exam.pk }}" name="client_contacts" rows="1">{{ exam.client_contacts }}</textarea></td>
+          <td><input class="excel-cell" form="exam-inline-{{ exam.pk }}" name="exam_url" value="{{ exam.exam_url }}" placeholder="https://"></td>
+          <td><select class="excel-cell" form="exam-inline-{{ exam.pk }}" name="status">{% for value,label in status_choices %}<option value="{{ value }}" {% if exam.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></td>
+          <td><select class="excel-cell" form="exam-inline-{{ exam.pk }}" name="responsible_manager"><option value="">—</option>{% for manager in user_choices %}<option value="{{ manager.pk }}" {% if exam.responsible_manager_id == manager.pk %}selected{% endif %}>{{ manager.get_full_name|default:manager.username }}</option>{% endfor %}</select></td>
+          <td><select class="excel-cell" form="exam-inline-{{ exam.pk }}" name="created_by" required>{% for manager in user_choices %}<option value="{{ manager.pk }}" {% if exam.created_by_id == manager.pk %}selected{% endif %}>{{ manager.get_full_name|default:manager.username }}</option>{% endfor %}</select></td>
+          <td class="recipient-cell">{% if exam.notification_recipients.all %}{% for manager in exam.notification_recipients.all %}<span>{{ manager.first_name|default:manager.username }}</span>{% endfor %}{% else %}<span>Все</span>{% endif %}</td>
+          <td class="save-cell"><form id="exam-inline-{{ exam.pk }}" method="post" action="{% url 'exam-inline-update' exam.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="excel-save" title="Сохранить строку">✓</button></form></td>
+        </tr>{% empty %}<tr class="empty-table-row"><td colspan="15"><div class="calm-empty"><strong>Ничего не найдено</strong><span>Добавьте первую строку прямо ниже или откройте отдельную страницу.</span></div></td></tr>{% endfor %}
+        <tr id="new-exam-row" class="editable-row new-exam-row" hidden>
+          <td class="row-number">+</td>
+          <td><input class="excel-cell excel-date" form="exam-inline-new" type="datetime-local" name="exam_at" required></td>
+          <td><input class="excel-cell" form="exam-inline-new" name="client_full_name" placeholder="ФИО клиента" required></td>
+          <td><input class="excel-cell" form="exam-inline-new" name="client_login" placeholder="Логин"></td>
+          <td><input class="excel-cell mono" form="exam-inline-new" name="client_password" placeholder="Пароль"></td>
+          <td><input class="excel-cell" form="exam-inline-new" name="university" placeholder="Вуз" required></td>
+          <td><input class="excel-cell" form="exam-inline-new" name="subject" placeholder="Предмет" required></td>
+          <td><input class="excel-cell" form="exam-inline-new" name="client_source" placeholder="Откуда"></td>
+          <td><textarea class="excel-cell excel-textarea" form="exam-inline-new" name="client_contacts" rows="1" placeholder="Контакты"></textarea></td>
+          <td><input class="excel-cell" form="exam-inline-new" name="exam_url" placeholder="https://"></td>
+          <td><select class="excel-cell" form="exam-inline-new" name="status">{% for value,label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></td>
+          <td><select class="excel-cell" form="exam-inline-new" name="responsible_manager"><option value="">—</option>{% for manager in user_choices %}<option value="{{ manager.pk }}" {% if request.user.pk == manager.pk %}selected{% endif %}>{{ manager.get_full_name|default:manager.username }}</option>{% endfor %}</select></td>
+          <td><select class="excel-cell" form="exam-inline-new" name="created_by" required>{% for manager in user_choices %}<option value="{{ manager.pk }}" {% if request.user.pk == manager.pk %}selected{% endif %}>{{ manager.get_full_name|default:manager.username }}</option>{% endfor %}</select></td>
+          <td class="recipient-cell"><span>Все</span></td>
+          <td class="save-cell"><form id="exam-inline-new" method="post" action="{% url 'exam-inline-create' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="excel-save" title="Добавить строку">+</button></form></td>
+        </tr></tbody>
+      </table>
+    </div>
+    <div class="excel-tabs"><span class="active">Экзамены</span><button type="button" class="excel-add-row" data-add-exam-row>+ Добавить строку</button><a href="{% url 'exam-create' %}">Открыть отдельную страницу ↗</a><small>Asia/Ashgabat</small></div>
+  </div>
+  {% if is_paginated %}<nav class="pagination">{% if page_obj.has_previous %}<a href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page_obj.previous_page_number }}">← Назад</a>{% endif %}<span>{{ page_obj.number }} / {{ paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page_obj.next_page_number }}">Далее →</a>{% endif %}</nav>{% endif %}
+</div>
+<script>document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter'){const f=e.target.getAttribute('form');if(f)document.getElementById(f).requestSubmit();}});document.querySelector('[data-add-exam-row]')?.addEventListener('click',e=>{const row=document.getElementById('new-exam-row');row.hidden=!row.hidden;e.currentTarget.textContent=row.hidden?'+ Добавить строку':'− Скрыть строку';if(!row.hidden){row.querySelector('input[name="exam_at"]').focus();row.scrollIntoView({behavior:'smooth',block:'nearest'});}});</script>
+{% endblock %}

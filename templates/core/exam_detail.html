@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}{{ exam.client_full_name }} — ExamSL{% endblock %}
+{% block content %}
+<div class="shell page detail-page">
+  <div class="breadcrumb"><a href="{% url 'exam-list' %}">Экзамены</a><span>→</span><span>{{ exam.client_full_name }}</span></div>
+  <section class="detail-hero">
+    <div><span class="status status-{{ exam.status }}">{{ exam.get_status_display }}</span><h1>{{ exam.client_full_name }}</h1><p>{{ exam.subject }} · {{ exam.university }}</p></div>
+    <div class="hero-actions"><a class="button button-ghost" href="{% url 'exam-update' exam.pk %}">Изменить</a>{% if exam.exam_url %}<a class="button button-dark" target="_blank" rel="noopener" href="{{ exam.exam_url }}">Открыть экзамен ↗</a>{% endif %}</div>
+  </section>
+  <div class="detail-grid">
+    <div class="detail-main">
+      <section class="accent-date-card"><div><span>{{ exam.exam_at|date:'l' }}</span><strong>{{ exam.exam_at|date:'d' }}</strong><small>{{ exam.exam_at|date:'F Y' }}</small></div><div><span>Начало</span><strong>{{ exam.exam_at|date:'H:i' }}</strong><small>Asia/Ashgabat</small></div><div class="date-card-copy"><span>До экзамена</span><strong data-countdown="{{ exam.exam_at|date:'c' }}">—</strong><small>Напоминания: 08:00, 20:00 и за 30 минут</small></div></section>
+      <section class="info-card"><header><p class="eyebrow">Доступ</p><h2>Данные клиента</h2></header><div class="info-grid"><div><span>Логин</span><strong>{{ exam.client_login|default:'—' }}</strong></div><div><span>Пароль</span><strong class="open-password">{{ exam.client_password|default:'—' }}</strong></div><div><span>Контакты</span><strong>{{ exam.client_contacts|linebreaksbr|default:'—' }}</strong></div><div><span>Источник</span><strong>{{ exam.client_source|default:'—' }}</strong></div><div><span>Students Life user ID</span><strong>{{ exam.external_user_id|default:'—' }}</strong></div><div><span>Profile ID</span><strong>{{ exam.external_profile_id|default:'—' }}</strong></div></div></section>
+      <section class="comments-card"><header><div><p class="eyebrow">Рабочие заметки</p><h2>Комментарии</h2></div><span>{{ exam.comments.count }}</span></header><form method="post" action="{% url 'comment-add' exam.pk %}" class="comment-form">{% csrf_token %}{{ comment_form.text }}<div>{{ comment_form.is_client_warned }}<label for="{{ comment_form.is_client_warned.id_for_label }}">Клиент предупреждён</label><button class="button button-dark button-small">Добавить</button></div></form><div class="comment-list">{% for comment in exam.comments.all %}<article><div class="comment-avatar">{{ comment.author.first_name|default:comment.author.username|slice:':1'|upper }}</div><div><header><strong>{{ comment.author.first_name|default:comment.author.username }}</strong><time>{{ comment.created_at|date:'d.m.Y H:i' }}</time></header><p>{{ comment.text|linebreaksbr }}</p>{% if comment.is_client_warned %}<span class="warned-mark">✓ Клиент предупреждён</span>{% endif %}</div></article>{% empty %}<div class="calm-empty"><strong>Комментариев ещё нет</strong><span>Добавьте первую рабочую заметку.</span></div>{% endfor %}</div></section>
+    </div>
+    <aside class="detail-aside">
+      <section class="side-card"><p class="eyebrow">Команда</p><h3>Ответственные</h3><div class="manager-list">{% if exam.responsible_manager %}<span><i>{{ exam.responsible_manager.first_name|default:exam.responsible_manager.username|slice:':1'|upper }}</i>Ответственный: {{ exam.responsible_manager.get_full_name|default:exam.responsible_manager.username }}</span>{% else %}<span><i>—</i>Ответственный: не выбран</span>{% endif %}<span><i>{{ exam.created_by.first_name|default:exam.created_by.username|slice:':1'|upper }}</i>Добавил: {{ exam.created_by.get_full_name|default:exam.created_by.username }}</span></div></section>
+      <section class="side-card"><p class="eyebrow">Push‑получатели</p><h3>{% if exam.notification_recipients.all %}Выбраны вручную{% else %}Все менеджеры{% endif %}</h3><div class="manager-list">{% for manager in exam.notification_recipients.all %}<span><i>{{ manager.first_name|default:manager.username|slice:':1'|upper }}</i>{{ manager.first_name|default:manager.username }}</span>{% empty %}<p>Уведомление получит каждый активный менеджер с подключённым браузером.</p>{% endfor %}</div></section>
+      <section class="side-card"><p class="eyebrow">Журнал</p><h3>Уведомления</h3><div class="log-list">{% for log in exam.notification_logs.all|slice:':8' %}<div><span class="log-dot {{ log.status }}"></span><p><strong>{{ log.get_kind_display }}</strong><small>{{ log.created_at|date:'d.m H:i' }} · {{ log.get_status_display }}</small></p></div>{% empty %}<p class="muted">Отправок пока не было.</p>{% endfor %}</div></section>
+      <a class="danger-link" href="{% url 'exam-delete' exam.pk %}">Удалить экзамен →</a>
+    </aside>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Обзор — ExamSL{% endblock %}
+{% block content %}
+<div class="shell page">
+  <section class="page-hero dashboard-hero">
+    <div><p class="eyebrow">{{ request.user.first_name|default:request.user.username }}, всё по плану</p><h1>Экзамены <em>сегодня.</em></h1><p class="hero-copy">Самое важное на ближайшие 48 часов — без лишнего шума.</p></div>
+    <div class="hero-actions"><button class="button button-ghost" data-search-open>Найти клиента</button><a class="button button-dark" href="{% url 'exam-create' %}">Добавить экзамен</a></div>
+  </section>
+
+  <section class="stats-grid" aria-label="Статистика">
+    <article class="stat-card accent"><p>Сегодня</p><strong>{{ today_count }}</strong><span>экзамен{{ today_count|pluralize:'а,ов' }}</span><div class="mini-line"></div></article>
+    <article class="stat-card"><p>Завтра</p><strong>{{ tomorrow_count }}</strong><span>экзамен{{ tomorrow_count|pluralize:'а,ов' }}</span></article>
+    <article class="stat-card"><p>Впереди</p><strong>{{ active_count }}</strong><span>активных</span></article>
+    <article class="stat-card"><p>Push</p><strong>{{ device_count }}</strong><span>ваших браузеров</span></article>
+  </section>
+
+  <section class="timeline-section">
+    <div class="section-heading"><div><p class="eyebrow">Ближайшие 48 часов</p><h2>Сегодня и завтра</h2></div><a class="text-link" href="{% url 'exam-list' %}">Все экзамены →</a></div>
+    <div class="day-grid">
+      <article class="day-card">
+        <header><div><span class="day-dot"></span><strong>Сегодня</strong></div><span>{{ today_count }}</span></header>
+        <div class="exam-stack">
+          {% for exam in today_exams %}
+          <a class="exam-row" href="{{ exam.get_absolute_url }}"><time>{{ exam.exam_at|date:'H:i' }}</time><div><strong>{{ exam.client_full_name }}</strong><span>{{ exam.subject }} · {{ exam.university }}</span></div><span class="row-arrow">→</span></a>
+          {% empty %}<div class="calm-empty"><strong>Свободный день</strong><span>На сегодня экзаменов нет.</span></div>{% endfor %}
+        </div>
+      </article>
+      <article class="day-card">
+        <header><div><span class="day-dot pale"></span><strong>Завтра</strong></div><span>{{ tomorrow_count }}</span></header>
+        <div class="exam-stack">
+          {% for exam in tomorrow_exams %}
+          <a class="exam-row" href="{{ exam.get_absolute_url }}"><time>{{ exam.exam_at|date:'H:i' }}</time><div><strong>{{ exam.client_full_name }}</strong><span>{{ exam.subject }} · {{ exam.university }}</span></div><span class="row-arrow">→</span></a>
+          {% empty %}<div class="calm-empty"><strong>Пока пусто</strong><span>На завтра экзаменов нет.</span></div>{% endfor %}
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="upcoming-section">
+    <div class="section-heading"><div><p class="eyebrow">Далее</p><h2>На горизонте</h2></div></div>
+    <div class="upcoming-grid">
+      {% for exam in upcoming %}<a class="upcoming-card" href="{{ exam.get_absolute_url }}"><span>{{ exam.exam_at|date:'d M' }}</span><strong>{{ exam.client_full_name }}</strong><small>{{ exam.exam_at|date:'H:i' }} · {{ exam.subject }}</small></a>
+      {% empty %}<div class="neutral-card">Новых экзаменов пока нет.</div>{% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
