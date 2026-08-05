@@ -51,7 +51,7 @@ STUDENTSLIFE_TOKEN_FILE=./studentslife-token.json
 SITE_URL=https://exam.example.com
 ```
 
-- Если рядом лежит `studentslife-token.json` из `studentslife-auth.ps1`, ExamSL берёт `access` и `refresh` оттуда. При ответе `401` приложение само вызывает `/auth/refresh/`, сохраняет новый `access` в файл и повторяет запрос.
+- Если рядом лежит локальный `studentslife-token.json`, созданный `studentslife-auth.ps1`, ExamSL берёт `access` и `refresh` оттуда. Файл содержит секреты, исключён из Git и не должен передаваться вместе с исходным кодом или пакетами выпуска. При ответе `401` приложение само вызывает `/auth/refresh/`, сохраняет новый `access` в локальный файл и повторяет запрос.
 - `refresh` нельзя использовать как Bearer для обычных API. Bearer всегда должен быть `access`, а `refresh` нужен только для `/auth/refresh/`.
 - `X-API-KEY` используется как запасной вариант для поиска пользователей и профилей, если Bearer не задан.
 - Для тестового push конкретному клиенту API токенов должен возвращать связь с владельцем как `user`, `user_id` или `owner`. Если serializer отдаёт только `token/platform/device_id`, сервер API нужно расширить либо добавить endpoint фильтрации `?user=<id>`.
