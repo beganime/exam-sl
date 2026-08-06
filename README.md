@@ -1,5 +1,20 @@
 # ExamSL
 
+## Google Sheets
+
+Production reads new exams from the `Экзамены` sheet every 60 seconds. The
+worker creates one local record per `ID экзамена`, resolves the client name by
+`Айди` from `Общее`, and sends push notifications only for a new row or when
+the exam date/time changes. Run it with:
+
+```bash
+python manage.py sync_google_sheets --watch
+```
+
+The service account is mounted from `./secrets`; JSON credentials are never
+stored in Git. Docker deployment includes PostgreSQL, web, sheet worker and
+notification worker. ExamSL does not require the future shared document disk.
+
 Внутренняя Django‑система для менеджеров: экзамены, клиенты, комментарии, быстрый поиск и браузерные FCM‑уведомления. Интерфейс и расписание работают в часовом поясе `Asia/Ashgabat`.
 
 ## Быстрый запуск

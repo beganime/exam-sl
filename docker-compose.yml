@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-examsl}
+      POSTGRES_USER: ${POSTGRES_USER:-examsl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-examsl} -d ${POSTGRES_DB:-examsl}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn examsl.wsgi:application --bind 0.0.0.0:8000 --workers 2"
+    volumes:
+      - static_data:/app/staticfiles
+      - ./secrets:/app/secrets:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=5).read()\""]
+      interval: 20s
+      timeout: 7s
+      retries: 10
+      start_period: 45s
+
+  sheets-worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: python manage.py sync_google_sheets --watch
+    volumes:
+      - ./secrets:/app/secrets:ro
+    depends_on:
+      web:
+        condition: service_healthy
+
+  notification-worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: python manage.py run_notification_worker --interval 30
+    volumes:
+      - ./secrets:/app/secrets:ro
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  static_data:

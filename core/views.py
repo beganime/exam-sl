@@ -62,6 +62,8 @@ class ManagerLogoutView(LogoutView):
 
 
 def register(request):
+    if not settings.MANAGER_REGISTRATION_ENABLED:
+        return JsonResponse({"detail": "Регистрация менеджеров отключена."}, status=403)
     if request.user.is_authenticated:
         return redirect("dashboard")
     form = ManagerRegistrationForm(request.POST or None)
@@ -71,6 +73,22 @@ def register(request):
         messages.success(request, "Аккаунт менеджера создан. Теперь подключите уведомления.")
         return redirect("push-settings")
     return render(request, "registration/register.html", {"form": form})
+
+
+def health(request):
+    from django.db import connection
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except Exception:
+        return JsonResponse({"status": "unhealthy", "database": "unavailable"}, status=503)
+    return JsonResponse({
+        "status": "ok",
+        "database": "ok",
+        "google_sheets_enabled": settings.GOOGLE_SHEETS_ENABLED,
+    })
 
 
 @login_required

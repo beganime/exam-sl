@@ -10,5 +10,8 @@ firebase-service-account.json
 firebase-service-account-legacy.json
 studentslife-token.json
 *.log
+outputs/
+deploy/*.zip
+secrets/
 .idea/
 .vscode/

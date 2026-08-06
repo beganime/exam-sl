@@ -1,0 +1,12 @@
+.git
+.env
+.venv
+venv
+__pycache__
+*.pyc
+*.sqlite3
+outputs
+deploy/*.zip
+secrets
+firebase-service-account*.json
+studentslife-token.json
