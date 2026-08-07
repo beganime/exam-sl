@@ -1,4 +1,14 @@
 services:
+  db:
+    profiles: ["local-db"]
+
   web:
     ports:
       - "127.0.0.1:8102:8000"
+    depends_on: !reset {}
+
+  sheets-worker:
+    profiles: ["workers"]
+
+  notification-worker:
+    profiles: ["workers"]
