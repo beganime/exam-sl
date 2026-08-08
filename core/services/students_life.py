@@ -265,3 +265,11 @@ class StudentsLifeClient:
             if owner_id is not None and str(owner_id) in wanted and item.get("is_active", True):
                 matched_tokens.append(item)
         return user_ids, matched_tokens
+
+    def upsert_client_exam(self, user_id: str, payload: dict):
+        return self._request(
+            "POST",
+            f"notifications/clients/{user_id}/exams/",
+            json=payload,
+            bearer_required=not bool(self.api_key),
+        )

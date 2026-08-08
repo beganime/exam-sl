@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -118,6 +119,31 @@ def _next_retry_at(attempt_count):
     return timezone.now() + timedelta(seconds=delay)
 
 
+def students_exam_payload(exam):
+    local_exam = timezone.localtime(exam.exam_at)
+    details = [value for value in (exam.university, exam.program, exam.exam_url) if value]
+    return {
+        "subject": exam.subject or exam.program or exam.university or "Экзамен",
+        "exam_date": local_exam.date().isoformat(),
+        "exam_time": local_exam.time().replace(microsecond=0).isoformat(),
+        "timezone": str(settings.TIME_ZONE),
+        "comment": " · ".join(details),
+        "manager_sl_exam_id": exam.source_id or f"exam-sl-{exam.pk}",
+        "is_active": exam.status != Exam.Status.CANCELLED,
+    }
+
+
+def sync_exam_to_students_life(exam, lookup):
+    if not lookup:
+        return 0
+    students = StudentsLifeClient()
+    delivered = 0
+    for user_id in students.resolve_user_ids(lookup):
+        students.upsert_client_exam(user_id, students_exam_payload(exam))
+        delivered += 1
+    return delivered
+
+
 def notify_change(exam, *, created, log=None):
     kind = NotificationLog.Kind.SHEET_NEW if created else NotificationLog.Kind.SHEET_UPDATED
     if log is None:
@@ -132,10 +158,12 @@ def notify_change(exam, *, created, log=None):
         return {"status": "sent", "success_count": log.success_count, "failure_count": log.failure_count}
 
     log.attempt_count += 1
+    in_app_success_count = 0
     tokens = set(BrowserDevice.objects.filter(is_active=True).values_list("token", flat=True))
     lookup = exam.sl_id or exam.client_email or exam.client_full_name
     if lookup:
         try:
+            in_app_success_count = sync_exam_to_students_life(exam, lookup)
             _, remote_tokens = StudentsLifeClient().find_tokens_for_client(lookup)
             tokens.update(item.get("token") for item in remote_tokens if item.get("token"))
         except StudentsLifeAPIError:
@@ -146,11 +174,33 @@ def notify_change(exam, *, created, log=None):
         f"{exam.client_full_name} · {exam.university} · "
         f"{timezone.localtime(exam.exam_at).strftime('%d.%m.%Y %H:%M')}"
     )
+    firebase_paths = [
+        Path(value) for value in (settings.FIREBASE_CREDENTIALS, settings.FIREBASE_LEGACY_CREDENTIALS)
+        if str(value or "").strip()
+    ]
+    firebase_configured = any(path.is_file() for path in firebase_paths)
+    if in_app_success_count and not firebase_configured:
+        log.status = NotificationLog.Status.SENT
+        log.success_count = in_app_success_count
+        log.failure_count = 0
+        log.error = ""
+        log.next_retry_at = None
+        log.save(update_fields=[
+            "status", "success_count", "failure_count", "error",
+            "attempt_count", "next_retry_at",
+        ])
+        return {
+            "status": log.status,
+            "success_count": log.success_count,
+            "failure_count": log.failure_count,
+            "attempt_count": log.attempt_count,
+        }
+
     try:
         if not tokens:
             raise RuntimeError("Нет активных push-токенов менеджеров или клиента.")
         result = send_push(list(tokens), title, body, {"exam_id": exam.pk, "kind": kind}, exam.get_absolute_url())
-        log.success_count = result.get("success_count", 0)
+        log.success_count = in_app_success_count + result.get("success_count", 0)
         log.failure_count = result.get("failure_count", 0)
         log.error = "; ".join(result.get("errors", []))
         if not log.success_count:

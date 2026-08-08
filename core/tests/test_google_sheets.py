@@ -70,7 +70,7 @@ class GoogleSheetsSyncTests(TestCase):
         SHEET_NOTIFICATION_MAX_ATTEMPTS=3,
         SHEET_NOTIFICATION_RETRY_BASE_SECONDS=30,
     )
-    @patch("core.services.google_sheets.StudentsLifeClient.find_tokens_for_client", return_value=([], []))
+    @patch("core.services.google_sheets.StudentsLifeClient.resolve_user_ids", return_value=[])
     @patch("core.services.google_sheets.send_push")
     def test_failed_change_notification_is_retried_without_losing_exam(self, send_mock, _tokens_mock):
         manager = User.objects.create_user(username="retry-manager")
@@ -106,3 +106,29 @@ class GoogleSheetsSyncTests(TestCase):
         self.assertEqual(log.status, NotificationLog.Status.SENT)
         self.assertEqual(log.attempt_count, 2)
         self.assertIsNone(log.next_retry_at)
+
+    @override_settings(FIREBASE_CREDENTIALS="missing-firebase.json", FIREBASE_LEGACY_CREDENTIALS="")
+    @patch("core.services.google_sheets.StudentsLifeClient.find_tokens_for_client", return_value=([], []))
+    @patch("core.services.google_sheets.StudentsLifeClient.upsert_client_exam", return_value={"sync_status": "created"})
+    @patch("core.services.google_sheets.StudentsLifeClient.resolve_user_ids", return_value=["77"])
+    @patch("core.services.google_sheets.send_push")
+    def test_in_app_exam_delivery_succeeds_without_firebase(
+        self, send_mock, _resolve_mock, upsert_mock, _tokens_mock
+    ):
+        manager = User.objects.create_user(username="in-app-manager")
+        exam = Exam.objects.create(
+            source_id="EXAM-IN-APP",
+            sl_id="SL-001",
+            client_full_name="Иван Иванов",
+            exam_at=timezone.now() + timedelta(days=2),
+            university="КФУ",
+            subject="Русский язык",
+            created_by=manager,
+        )
+
+        result = notify_change(exam, created=True)
+
+        self.assertEqual(result["status"], NotificationLog.Status.SENT)
+        self.assertEqual(result["success_count"], 1)
+        upsert_mock.assert_called_once()
+        send_mock.assert_not_called()
