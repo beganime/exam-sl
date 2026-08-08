@@ -104,6 +104,7 @@ class NotificationLog(models.Model):
         SHEET_UPDATED = "sheet_updated", "Изменение экзамена в Google Sheets"
 
     class Status(models.TextChoices):
+        PENDING = "pending", "Ожидает отправки"
         SENT = "sent", "Отправлено"
         FAILED = "failed", "Ошибка"
         SKIPPED = "skipped", "Пропущено"
@@ -116,6 +117,8 @@ class NotificationLog(models.Model):
     success_count = models.PositiveIntegerField(default=0)
     failure_count = models.PositiveIntegerField(default=0)
     error = models.TextField(blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    next_retry_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

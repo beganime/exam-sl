@@ -1,10 +1,14 @@
+from datetime import timedelta
 from unittest.mock import Mock
+from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
-from core.models import Exam
-from core.services.google_sheets import sync_exams
+from core.models import BrowserDevice, Exam, NotificationLog
+from core.services.google_sheets import notify_change, retry_failed_change_notifications, sync_exams
 
 
 class FakeSource:
@@ -61,3 +65,44 @@ class GoogleSheetsSyncTests(TestCase):
     def test_manager_registration_is_disabled(self):
         response = self.client.get(reverse("register"))
         self.assertEqual(response.status_code, 403)
+
+    @override_settings(
+        SHEET_NOTIFICATION_MAX_ATTEMPTS=3,
+        SHEET_NOTIFICATION_RETRY_BASE_SECONDS=30,
+    )
+    @patch("core.services.google_sheets.StudentsLifeClient.find_tokens_for_client", return_value=([], []))
+    @patch("core.services.google_sheets.send_push")
+    def test_failed_change_notification_is_retried_without_losing_exam(self, send_mock, _tokens_mock):
+        manager = User.objects.create_user(username="retry-manager")
+        BrowserDevice.objects.create(user=manager, token="manager-token")
+        exam = Exam.objects.create(
+            source_id="EXAM-RETRY",
+            client_full_name="Иван Иванов",
+            exam_at=timezone.now() + timedelta(days=2),
+            university="КФУ",
+            subject="Русский язык",
+            created_by=manager,
+        )
+        send_mock.side_effect = RuntimeError("Firebase temporarily unavailable")
+
+        first = notify_change(exam, created=True)
+
+        log = NotificationLog.objects.get(exam=exam, kind=NotificationLog.Kind.SHEET_NEW)
+        self.assertEqual(first["status"], NotificationLog.Status.FAILED)
+        self.assertEqual(log.attempt_count, 1)
+        self.assertIsNotNone(log.next_retry_at)
+
+        send_mock.side_effect = None
+        send_mock.return_value = {
+            "success_count": 1,
+            "failure_count": 0,
+            "invalid_tokens": [],
+            "errors": [],
+        }
+        retried = retry_failed_change_notifications(now=log.next_retry_at + timedelta(seconds=1))
+
+        log.refresh_from_db()
+        self.assertEqual(retried, {"sent": 1, "failed": 0})
+        self.assertEqual(log.status, NotificationLog.Status.SENT)
+        self.assertEqual(log.attempt_count, 2)
+        self.assertIsNone(log.next_retry_at)

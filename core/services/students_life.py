@@ -141,7 +141,12 @@ class StudentsLifeClient:
 
     def search_users(self, query: str, limit: int = 20):
         try:
-            payload = self._request("GET", "accounts/users/", params={"search": query, "limit": limit}, bearer_required=True)
+            payload = self._request(
+                "GET",
+                "accounts/users/",
+                params={"search": query, "limit": limit},
+                bearer_required=not bool(self.api_key),
+            )
         except StudentsLifeAPIError as exc:
             if "404 Client Error" in str(exc):
                 raise StudentsLifeEndpointUnavailable("Students Life API сейчас не отдаёт /accounts/users/ (404).") from exc
@@ -150,7 +155,12 @@ class StudentsLifeClient:
 
     def search_profiles(self, query: str, limit: int = 20):
         try:
-            payload = self._request("GET", "accounts/client-profiles/", params={"search": query, "limit": limit}, bearer_required=True)
+            payload = self._request(
+                "GET",
+                "accounts/client-profiles/",
+                params={"search": query, "limit": limit},
+                bearer_required=not bool(self.api_key),
+            )
         except StudentsLifeAPIError as exc:
             if "404 Client Error" in str(exc):
                 raise StudentsLifeEndpointUnavailable("Students Life API сейчас не отдаёт /accounts/client-profiles/ (404).") from exc
@@ -158,7 +168,11 @@ class StudentsLifeClient:
         return self._items(payload)
 
     def list_device_tokens(self):
-        payload = self._request("GET", "notifications/device-tokens/", bearer_required=True)
+        payload = self._request(
+            "GET",
+            "notifications/device-tokens/",
+            bearer_required=not bool(self.api_key),
+        )
         return self._items(payload)
 
     def register_device_token(self, token: str, device_id: str):
@@ -166,12 +180,14 @@ class StudentsLifeClient:
             "POST",
             "notifications/device-tokens/",
             json={"token": token, "platform": "web", "device_id": device_id, "is_active": True},
-            bearer_required=True,
+            bearer_required=not bool(self.api_key),
         )
 
     def delete_device_token(self, token_id: str):
         return self._request(
-            "DELETE", f"notifications/device-tokens/{token_id}/", bearer_required=True
+            "DELETE",
+            f"notifications/device-tokens/{token_id}/",
+            bearer_required=not bool(self.api_key),
         )
 
     def find_tokens_for_user(self, user_id: str):

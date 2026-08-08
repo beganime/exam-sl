@@ -1,10 +1,11 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.models import BrowserDevice, Exam, NotificationLog
@@ -108,7 +109,29 @@ def system_user():
     return user
 
 
-def notify_change(exam, *, created):
+def _next_retry_at(attempt_count):
+    max_attempts = max(settings.SHEET_NOTIFICATION_MAX_ATTEMPTS, 1)
+    if attempt_count >= max_attempts:
+        return None
+    base = max(settings.SHEET_NOTIFICATION_RETRY_BASE_SECONDS, 30)
+    delay = min(base * (2 ** max(attempt_count - 1, 0)), 6 * 60 * 60)
+    return timezone.now() + timedelta(seconds=delay)
+
+
+def notify_change(exam, *, created, log=None):
+    kind = NotificationLog.Kind.SHEET_NEW if created else NotificationLog.Kind.SHEET_UPDATED
+    if log is None:
+        log = NotificationLog.objects.create(
+            exam=exam,
+            recipient=None,
+            kind=kind,
+            scheduled_for=timezone.now(),
+            status=NotificationLog.Status.PENDING,
+        )
+    if log.status == NotificationLog.Status.SENT:
+        return {"status": "sent", "success_count": log.success_count, "failure_count": log.failure_count}
+
+    log.attempt_count += 1
     tokens = set(BrowserDevice.objects.filter(is_active=True).values_list("token", flat=True))
     lookup = exam.sl_id or exam.client_email or exam.client_full_name
     if lookup:
@@ -118,32 +141,73 @@ def notify_change(exam, *, created):
         except StudentsLifeAPIError:
             logger.warning("Students Life tokens are unavailable for %s", lookup, exc_info=True)
 
-    kind = NotificationLog.Kind.SHEET_NEW if created else NotificationLog.Kind.SHEET_UPDATED
     title = "Добавлен экзамен" if created else "Изменены дата или время экзамена"
     body = (
         f"{exam.client_full_name} · {exam.university} · "
         f"{timezone.localtime(exam.exam_at).strftime('%d.%m.%Y %H:%M')}"
     )
-    if tokens:
+    try:
+        if not tokens:
+            raise RuntimeError("Нет активных push-токенов менеджеров или клиента.")
         result = send_push(list(tokens), title, body, {"exam_id": exam.pk, "kind": kind}, exam.get_absolute_url())
-        log_status = NotificationLog.Status.SENT if result["success_count"] else NotificationLog.Status.FAILED
-        error = "; ".join(result.get("errors", []))
-    else:
-        result = {"success_count": 0, "failure_count": 0}
-        log_status = NotificationLog.Status.SKIPPED
-        error = "Нет активных push-токенов."
-    NotificationLog.objects.update_or_create(
-        exam=exam,
-        recipient=None,
-        kind=kind,
-        scheduled_for=exam.exam_at,
-        defaults={
-            "status": log_status,
-            "success_count": result["success_count"],
-            "failure_count": result["failure_count"],
-            "error": error,
-        },
+        log.success_count = result.get("success_count", 0)
+        log.failure_count = result.get("failure_count", 0)
+        log.error = "; ".join(result.get("errors", []))
+        if not log.success_count:
+            raise RuntimeError(log.error or "Firebase не доставил уведомление ни на одно устройство.")
+        BrowserDevice.objects.filter(token__in=result.get("invalid_tokens", [])).update(is_active=False)
+        log.status = NotificationLog.Status.SENT
+        log.next_retry_at = None
+    except Exception as exc:
+        log.status = NotificationLog.Status.FAILED
+        log.error = str(exc)[:4000]
+        log.next_retry_at = _next_retry_at(log.attempt_count)
+        logger.warning(
+            "Exam change notification failed for exam %s (attempt %s).",
+            exam.pk,
+            log.attempt_count,
+            exc_info=True,
+        )
+    log.save(
+        update_fields=[
+            "status",
+            "success_count",
+            "failure_count",
+            "error",
+            "attempt_count",
+            "next_retry_at",
+        ]
     )
+    return {
+        "status": log.status,
+        "success_count": log.success_count,
+        "failure_count": log.failure_count,
+        "attempt_count": log.attempt_count,
+    }
+
+
+def retry_failed_change_notifications(now=None, limit=100):
+    now = now or timezone.now()
+    max_attempts = max(settings.SHEET_NOTIFICATION_MAX_ATTEMPTS, 1)
+    logs = list(
+        NotificationLog.objects.select_related("exam")
+        .filter(
+            kind__in=[NotificationLog.Kind.SHEET_NEW, NotificationLog.Kind.SHEET_UPDATED],
+            status__in=[NotificationLog.Status.PENDING, NotificationLog.Status.FAILED],
+            attempt_count__lt=max_attempts,
+        )
+        .filter(Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now))
+        .order_by("created_at")[:max(int(limit), 1)]
+    )
+    stats = {"sent": 0, "failed": 0}
+    for log in logs:
+        result = notify_change(
+            log.exam,
+            created=log.kind == NotificationLog.Kind.SHEET_NEW,
+            log=log,
+        )
+        stats["sent" if result["status"] == NotificationLog.Status.SENT else "failed"] += 1
+    return stats
 
 
 @transaction.atomic
