@@ -6,9 +6,23 @@ services:
     ports:
       - "127.0.0.1:8102:8000"
     depends_on: !reset {}
+    networks:
+      - default
+      - sl_services_internal
 
   sheets-worker:
     profiles: ["workers"]
+    networks:
+      - default
+      - sl_services_internal
 
   notification-worker:
     profiles: ["workers"]
+    networks:
+      - default
+      - sl_services_internal
+
+networks:
+  sl_services_internal:
+    external: true
+    name: sl-services-internal
