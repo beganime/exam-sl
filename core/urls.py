@@ -16,6 +16,7 @@ urlpatterns = [
     path("exams/<int:pk>/inline/", views.inline_update_exam, name="exam-inline-update"),
     path("exams/<int:pk>/delete/", views.ExamDeleteView.as_view(), name="exam-delete"),
     path("exams/<int:pk>/comments/", views.add_comment, name="comment-add"),
+    path("api/internal/exams/<str:external_id>/seen/", views.client_exam_seen, name="client-exam-seen"),
     path("search/quick/", views.quick_search, name="quick-search"),
     path("push/", views.push_settings, name="push-settings"),
     path("push/register/", views.register_push_token, name="push-register"),

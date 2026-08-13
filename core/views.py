@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -9,17 +10,20 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
+from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from .forms import ExamCommentForm, ExamForm, ExamInlineForm, ManagerRegistrationForm
 from .models import BrowserDevice, Exam, NotificationLog
 from .services.fcm import send_push
+from .services.google_sheets import notify_change
 from .services.students_life import StudentsLifeAPIError, StudentsLifeClient, StudentsLifeEndpointUnavailable
 
 
@@ -153,7 +157,9 @@ class ExamCreateView(LoginRequiredMixin, CreateView):
         return initial
 
     def form_valid(self, form):
+        form.instance.created_by = self.request.user
         response = super().form_valid(form)
+        transaction.on_commit(lambda: notify_change(self.object, created=True))
         messages.success(self.request, "Экзамен добавлен.")
         return response
 
@@ -164,7 +170,12 @@ class ExamUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "core/exam_form.html"
 
     def form_valid(self, form):
+        previous_exam_at = Exam.objects.get(pk=self.object.pk).exam_at
         response = super().form_valid(form)
+        if previous_exam_at != self.object.exam_at:
+            self.object.client_acknowledged_at = None
+            self.object.save(update_fields=["client_acknowledged_at"])
+            transaction.on_commit(lambda: notify_change(self.object, created=False))
         messages.success(self.request, "Данные экзамена обновлены.")
         return response
 
@@ -217,6 +228,49 @@ class ExamDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context["comment_form"] = ExamCommentForm()
         return context
+
+
+@csrf_exempt
+@require_POST
+def client_exam_seen(request, external_id):
+    supplied_key = request.headers.get("X-API-KEY", "")
+    expected_key = settings.STUDENTSLIFE_API_KEY
+    if not expected_key or not secrets.compare_digest(supplied_key, expected_key):
+        return JsonResponse({"detail": "Invalid service key."}, status=403)
+
+    exam = Exam.objects.filter(source_id=external_id).first()
+    if exam is None and external_id.startswith("exam-sl-"):
+        exam = Exam.objects.filter(pk=external_id.removeprefix("exam-sl-")).first()
+    if exam is None:
+        return JsonResponse({"detail": "Exam not found."}, status=404)
+
+    try:
+        payload = json.loads(request.body or b"{}")
+        acknowledged_at = timezone.datetime.fromisoformat(str(payload.get("acknowledged_at") or ""))
+        if timezone.is_naive(acknowledged_at):
+            acknowledged_at = timezone.make_aware(acknowledged_at)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        acknowledged_at = timezone.now()
+    exam.client_acknowledged_at = acknowledged_at
+    exam.save(update_fields=["client_acknowledged_at"])
+
+    tokens = list(BrowserDevice.objects.filter(is_active=True).values_list("token", flat=True))
+    if tokens:
+        send_push(
+            tokens,
+            "Клиент увидел экзамен",
+            f"{exam.client_full_name} ознакомился с уведомлением: {exam.university}.",
+            {"exam_id": exam.pk, "kind": NotificationLog.Kind.CLIENT_SEEN},
+            exam.get_absolute_url(),
+        )
+    NotificationLog.objects.create(
+        exam=exam,
+        kind=NotificationLog.Kind.CLIENT_SEEN,
+        scheduled_for=acknowledged_at,
+        status=NotificationLog.Status.SENT,
+        success_count=len(tokens),
+    )
+    return JsonResponse({"status": "ok", "acknowledged_at": acknowledged_at.isoformat()})
 
 
 @login_required

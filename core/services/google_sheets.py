@@ -17,7 +17,7 @@ from core.services.students_life import StudentsLifeAPIError, StudentsLifeClient
 logger = logging.getLogger(__name__)
 
 EXAM_HEADERS = (
-    "ID экзамена", "Айди", "Внутренний ID", "Вуз", "Направление", "Экзамен",
+    "ID экзамена", "Айди", "ФИО клиента", "Внутренний ID", "Вуз", "Направление", "Экзамен",
     "Дата и время", "логин", "Пароль", "почта", "Место или ссылка",
     "Ответственный", "Обновлено", "Версия уведомления",
 )
@@ -44,7 +44,7 @@ class GoogleSheetsSource:
 
         credentials = service_account.Credentials.from_service_account_file(
             settings.GOOGLE_SHEETS_CREDENTIALS_FILE,
-            scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+            scopes=["https://www.googleapis.com/auth/spreadsheets"],
         )
         self.service = build("sheets", "v4", credentials=credentials, cache_discovery=False)
         self.spreadsheet_id = settings.GOOGLE_SHEETS_SPREADSHEET_ID
@@ -66,6 +66,62 @@ class GoogleSheetsSource:
             {header: row[index] if index < len(row) else "" for index, header in enumerate(headers)}
             for row in rows[1:]
         ]
+
+    def general_clients(self):
+        return self.rows(settings.GOOGLE_SHEETS_GENERAL_SHEET)
+
+    def prepare_exam_sheet(self):
+        metadata = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+        sheets = {item["properties"]["title"]: item["properties"] for item in metadata.get("sheets", [])}
+        general = sheets.get(settings.GOOGLE_SHEETS_GENERAL_SHEET)
+        if not general:
+            raise ValueError(f"Лист {settings.GOOGLE_SHEETS_GENERAL_SHEET} не найден.")
+        exams = sheets.get(settings.GOOGLE_SHEETS_EXAMS_SHEET)
+        if not exams:
+            response = self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={"requests": [{"addSheet": {"properties": {"title": settings.GOOGLE_SHEETS_EXAMS_SHEET}}}]},
+            ).execute()
+            exams = response["replies"][0]["addSheet"]["properties"]
+
+        general_headers = self.service.spreadsheets().values().get(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{quote_sheet(settings.GOOGLE_SHEETS_GENERAL_SHEET)}!1:1",
+        ).execute().get("values", [[]])[0]
+        try:
+            name_column = general_headers.index("ФИО абитуриента")
+        except ValueError as exc:
+            raise ValueError("В листе «Общее» отсутствует столбец «ФИО абитуриента».") from exc
+
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{quote_sheet(settings.GOOGLE_SHEETS_EXAMS_SHEET)}!A1:O1",
+            valueInputOption="RAW",
+            body={"values": [list(EXAM_HEADERS)]},
+        ).execute()
+        column_letter = _column_letter(name_column + 1)
+        exam_sheet_id = exams["sheetId"]
+        requests = [
+            {"updateSheetProperties": {"properties": {"sheetId": exam_sheet_id, "gridProperties": {"frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}},
+            {"repeatCell": {"range": {"sheetId": exam_sheet_id, "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(EXAM_HEADERS)}, "cell": {"userEnteredFormat": {"backgroundColor": {"red": 1, "green": 1, "blue": 1}, "textFormat": {"foregroundColor": {"red": 0, "green": 0, "blue": 0}, "bold": True}, "horizontalAlignment": "CENTER"}}, "fields": "userEnteredFormat"}},
+            {"updateDimensionProperties": {"range": {"sheetId": exam_sheet_id, "dimension": "ROWS", "startIndex": 1, "endIndex": 2000}, "properties": {"pixelSize": 34}, "fields": "pixelSize"}},
+            {"setDataValidation": {"range": {"sheetId": exam_sheet_id, "startRowIndex": 1, "endRowIndex": 2000, "startColumnIndex": 2, "endColumnIndex": 3}, "rule": {"condition": {"type": "ONE_OF_RANGE", "values": [{"userEnteredValue": f"='{settings.GOOGLE_SHEETS_GENERAL_SHEET}'!${column_letter}$2:${column_letter}$2000"}]}, "strict": True, "showCustomUi": True}}},
+        ]
+        for index in (0, 1, 3):
+            requests.append({"updateDimensionProperties": {"range": {"sheetId": exam_sheet_id, "dimension": "COLUMNS", "startIndex": index, "endIndex": index + 1}, "properties": {"hiddenByUser": True}, "fields": "hiddenByUser"}})
+        self.service.spreadsheets().batchUpdate(
+            spreadsheetId=self.spreadsheet_id,
+            body={"requests": requests},
+        ).execute()
+        return {"sheet": settings.GOOGLE_SHEETS_EXAMS_SHEET, "client_column": "ФИО клиента"}
+
+
+def _column_letter(number):
+    result = ""
+    while number:
+        number, remainder = divmod(number - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
 
 
 def parse_exam_at(value):
@@ -121,13 +177,13 @@ def _next_retry_at(attempt_count):
 
 def students_exam_payload(exam):
     local_exam = timezone.localtime(exam.exam_at)
-    details = [value for value in (exam.university, exam.program, exam.exam_url) if value]
     return {
-        "subject": exam.subject or exam.program or exam.university or "Экзамен",
+        "subject": exam.subject or "Экзамен",
+        "university": exam.university or "Экзамен",
         "exam_date": local_exam.date().isoformat(),
         "exam_time": local_exam.time().replace(microsecond=0).isoformat(),
         "timezone": str(settings.TIME_ZONE),
-        "comment": " · ".join(details),
+        "comment": "",
         "manager_sl_exam_id": exam.source_id or f"exam-sl-{exam.pk}",
         "is_active": exam.status != Exam.Status.CANCELLED,
     }
@@ -139,7 +195,11 @@ def sync_exam_to_students_life(exam, lookup):
     students = StudentsLifeClient()
     delivered = 0
     for user_id in students.resolve_user_ids(lookup):
-        students.upsert_client_exam(user_id, students_exam_payload(exam))
+        result = students.upsert_client_exam(user_id, students_exam_payload(exam))
+        external_exam_id = str(result.get("id") or "")
+        if external_exam_id and exam.external_exam_id != external_exam_id:
+            Exam.objects.filter(pk=exam.pk).update(external_exam_id=external_exam_id)
+            exam.external_exam_id = external_exam_id
         delivered += 1
     return delivered
 
@@ -164,10 +224,8 @@ def notify_change(exam, *, created, log=None):
     if lookup:
         try:
             in_app_success_count = sync_exam_to_students_life(exam, lookup)
-            _, remote_tokens = StudentsLifeClient().find_tokens_for_client(lookup)
-            tokens.update(item.get("token") for item in remote_tokens if item.get("token"))
         except StudentsLifeAPIError:
-            logger.warning("Students Life tokens are unavailable for %s", lookup, exc_info=True)
+            logger.warning("Students Life exam sync is unavailable for %s", lookup, exc_info=True)
 
     title = "Добавлен экзамен" if created else "Изменены дата или время экзамена"
     body = (
@@ -179,7 +237,7 @@ def notify_change(exam, *, created, log=None):
         if str(value or "").strip()
     ]
     firebase_configured = any(path.is_file() for path in firebase_paths)
-    if in_app_success_count and not firebase_configured:
+    if in_app_success_count and (not firebase_configured or not tokens):
         log.status = NotificationLog.Status.SENT
         log.success_count = in_app_success_count
         log.failure_count = 0
@@ -262,11 +320,10 @@ def retry_failed_change_notifications(now=None, limit=100):
 
 @transaction.atomic
 def sync_row(row, row_number, general_by_sl_id, notifier=notify_change):
-    source_id = str(row.get("ID экзамена") or "").strip()
-    if not source_id:
-        return "skipped"
+    source_id = str(row.get("ID экзамена") or f"sheet-row-{row_number}").strip()
     sl_id = str(row.get("Айди") or "").strip()
-    client = general_by_sl_id.get(sl_id, {})
+    client_name = str(row.get("ФИО клиента") or "").strip()
+    client = general_by_sl_id.get(sl_id, {}) or general_by_sl_id.get(client_name.casefold(), {})
     exam_at = parse_exam_at(row.get("Дата и время"))
     existing = Exam.objects.filter(source_id=source_id).first()
     date_changed = bool(existing and existing.exam_at != exam_at)
@@ -276,7 +333,7 @@ def sync_row(row, row_number, general_by_sl_id, notifier=notify_change):
         "source_row": row_number,
         "source_notification_version": integer(row.get("Версия уведомления")),
         "source_synced_at": timezone.now(),
-        "client_full_name": str(client.get("ФИО абитуриента") or sl_id or source_id),
+        "client_full_name": str(client.get("ФИО абитуриента") or client_name or sl_id or source_id),
         "client_login": str(row.get("логин") or ""),
         "client_password": str(row.get("Пароль") or ""),
         "client_email": str(row.get("почта") or ""),
@@ -298,11 +355,14 @@ def sync_exams(source=None, notifier=notify_change):
     if source is None and not sheets_enabled():
         return {"status": "disabled", "created": 0, "changed": 0, "unchanged": 0, "skipped": 0, "failed": 0}
     source = source or GoogleSheetsSource()
-    general_by_sl_id = {
-        str(row.get("Айди") or "").strip(): row
-        for row in source.rows(settings.GOOGLE_SHEETS_GENERAL_SHEET)
-        if str(row.get("Айди") or "").strip()
-    }
+    general_by_sl_id = {}
+    for row in source.rows(settings.GOOGLE_SHEETS_GENERAL_SHEET):
+        sl_id = str(row.get("Айди") or "").strip()
+        full_name = str(row.get("ФИО абитуриента") or "").strip()
+        if sl_id:
+            general_by_sl_id[sl_id] = row
+        if full_name:
+            general_by_sl_id[full_name.casefold()] = row
     stats = {"created": 0, "changed": 0, "unchanged": 0, "skipped": 0, "failed": 0}
     for row_number, row in enumerate(source.rows(settings.GOOGLE_SHEETS_EXAMS_SHEET), start=2):
         try:

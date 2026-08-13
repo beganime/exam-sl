@@ -39,6 +39,8 @@ class Exam(models.Model):
     custom_notify_at = models.DateTimeField("Дополнительное время уведомления", null=True, blank=True)
     external_user_id = models.CharField("ID клиента в Students Life", max_length=80, blank=True, db_index=True)
     external_profile_id = models.CharField("ID профиля в Students Life", max_length=80, blank=True)
+    external_exam_id = models.CharField("ID экзамена в Students Life", max_length=80, blank=True)
+    client_acknowledged_at = models.DateTimeField("Клиент ознакомился", null=True, blank=True)
     notification_recipients = models.ManyToManyField(
         User, verbose_name="Получатели уведомлений", related_name="assigned_exams", blank=True
     )
@@ -102,6 +104,7 @@ class NotificationLog(models.Model):
         TEST = "test", "Тестовое"
         SHEET_NEW = "sheet_new", "Новый экзамен из Google Sheets"
         SHEET_UPDATED = "sheet_updated", "Изменение экзамена в Google Sheets"
+        CLIENT_SEEN = "client_seen", "Клиент ознакомился"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Ожидает отправки"
