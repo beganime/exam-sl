@@ -157,7 +157,6 @@ class ExamCreateView(LoginRequiredMixin, CreateView):
         return initial
 
     def form_valid(self, form):
-        form.instance.created_by = self.request.user
         response = super().form_valid(form)
         transaction.on_commit(lambda: notify_change(self.object, created=True))
         messages.success(self.request, "Экзамен добавлен.")

@@ -49,6 +49,7 @@ class ExamForm(forms.ModelForm):
             "exam_url",
             "status",
             "responsible_manager",
+            "created_by",
         )
         widgets = {
             "client_full_name": forms.HiddenInput,
@@ -64,6 +65,7 @@ class ExamForm(forms.ModelForm):
         self.fields["sl_id"].required = False
         user_queryset = User.objects.order_by("first_name", "last_name", "username")
         self.fields["responsible_manager"].queryset = user_queryset
+        self.fields["created_by"].queryset = user_queryset
         choices = [("", "Выберите клиента")]
         self.client_records = {}
         try:
