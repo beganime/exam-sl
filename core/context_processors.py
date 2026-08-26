@@ -6,4 +6,5 @@ def app_settings(request):
         "firebase_web_config": settings.FIREBASE_WEB_CONFIG,
         "fcm_vapid_public_key": settings.FCM_VAPID_PUBLIC_KEY,
         "fcm_server_configured": bool(settings.FIREBASE_CREDENTIALS),
+        "manager_registration_enabled": settings.MANAGER_REGISTRATION_ENABLED,
     }

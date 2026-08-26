@@ -1,8 +1,11 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 from .models import Exam, ExamComment
+from .services.manager_auth import ManagerAuthUnavailable, authenticate_manager
 
 
 class DateTimeLocalInput(forms.DateTimeInput):
@@ -30,6 +33,56 @@ class ManagerRegistrationForm(UserCreationForm):
             user.manager_profile.phone = self.cleaned_data["phone"]
             user.manager_profile.save()
         return user
+
+
+class ManagerSLAuthenticationForm(AuthenticationForm):
+    username = forms.EmailField(
+        label="Email ManagerSL",
+        max_length=254,
+        widget=forms.EmailInput(attrs={"autocomplete": "username", "autofocus": True}),
+    )
+
+    error_messages = {
+        "invalid_login": "Email или пароль ManagerSL указаны неверно.",
+        "inactive": "Эта учётная запись отключена.",
+    }
+
+    def clean(self):
+        email = str(self.cleaned_data.get("username") or "").strip().lower()
+        password = str(self.cleaned_data.get("password") or "")
+        if not email or not password:
+            return self.cleaned_data
+
+        try:
+            identity = authenticate_manager(email, password)
+        except ManagerAuthUnavailable as exc:
+            raise ValidationError(
+                "ManagerSL временно не отвечает. Повторите вход через минуту.",
+                code="manager_unavailable",
+            ) from exc
+        if not identity:
+            raise self.get_invalid_login_error()
+
+        canonical_email = str(identity.get("email") or identity.get("username") or email).strip().lower()
+        user = User.objects.filter(
+            Q(email__iexact=canonical_email) | Q(username__iexact=canonical_email)
+        ).order_by("pk").first()
+        if user is None:
+            user = User(username=canonical_email, email=canonical_email)
+        elif not User.objects.filter(username__iexact=canonical_email).exclude(pk=user.pk).exists():
+            user.username = canonical_email
+
+        user.email = canonical_email
+        user.first_name = str(identity.get("first_name") or "")[:150]
+        user.last_name = str(identity.get("last_name") or "")[:150]
+        user.is_active = True
+        user.is_staff = bool(identity.get("is_staff"))
+        user.is_superuser = False
+        user.set_unusable_password()
+        user.save()
+        self.user_cache = user
+        self.confirm_login_allowed(user)
+        return self.cleaned_data
 
 
 class ExamForm(forms.ModelForm):

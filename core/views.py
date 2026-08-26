@@ -20,7 +20,13 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
-from .forms import ExamCommentForm, ExamForm, ExamInlineForm, ManagerRegistrationForm
+from .forms import (
+    ExamCommentForm,
+    ExamForm,
+    ExamInlineForm,
+    ManagerRegistrationForm,
+    ManagerSLAuthenticationForm,
+)
 from .models import BrowserDevice, Exam, NotificationLog
 from .services.fcm import send_push
 from .services.google_sheets import notify_change
@@ -59,6 +65,7 @@ def apply_exam_search(queryset, query):
 class ManagerLoginView(LoginView):
     template_name = "registration/login.html"
     redirect_authenticated_user = True
+    authentication_form = ManagerSLAuthenticationForm
 
 
 class ManagerLogoutView(LogoutView):
