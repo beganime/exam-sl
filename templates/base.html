@@ -4,12 +4,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#1e293b">
   <title>{% block title %}ExamSL{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260826-sl-theme">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -23,6 +23,7 @@
         <a class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Обзор</a>
         <a class="{% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam-list' %}">Экзамены</a>
         <a class="{% if 'push' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'push-settings' %}">Уведомления</a>
+        <a href="https://manager-sl.ru/" rel="noopener">ManagerSL</a>
       </nav>
       <div class="nav-actions">
         <button class="search-trigger" type="button" data-search-open aria-label="Открыть поиск">
