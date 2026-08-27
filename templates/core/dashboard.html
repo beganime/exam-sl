@@ -2,9 +2,9 @@
 {% block title %}Обзор — ExamSL{% endblock %}
 {% block content %}
 <div class="shell page">
-  <section class="page-hero dashboard-hero">
+  <section class="page-hero dashboard-hero exam-dashboard-hero">
     <div><p class="eyebrow">{{ request.user.first_name|default:request.user.username }}, всё по плану</p><h1>Экзамены <em>сегодня.</em></h1><p class="hero-copy">Самое важное на ближайшие 48 часов — без лишнего шума.</p></div>
-    <div class="hero-actions"><button class="button button-ghost" data-search-open>Найти клиента</button><a class="button button-dark" href="{% url 'exam-create' %}">Добавить экзамен</a></div>
+    <div class="hero-actions"><button class="button button-ghost" data-search-open><i data-lucide="search"></i>Найти клиента</button><a class="button button-dark" href="{% url 'exam-create' %}"><i data-lucide="plus"></i>Добавить экзамен</a></div>
   </section>
 
   <section class="stats-grid" aria-label="Статистика">

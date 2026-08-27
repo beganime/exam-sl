@@ -21,17 +21,26 @@ class Exam(models.Model):
         CANCELLED = "cancelled", "Отменён"
 
     client_full_name = models.CharField("ФИО клиента", max_length=255, db_index=True)
+    sl_id = models.CharField("SL-ID", max_length=32, blank=True, db_index=True)
+    source_id = models.CharField("ID строки источника", max_length=120, unique=True, null=True, blank=True)
+    source_row = models.PositiveIntegerField("Строка Google Sheets", null=True, blank=True)
+    source_notification_version = models.PositiveIntegerField("Версия уведомления", default=0)
+    source_synced_at = models.DateTimeField("Синхронизировано", null=True, blank=True)
     client_login = models.CharField("Логин", max_length=255, blank=True)
     client_password = models.CharField("Пароль", max_length=255, blank=True)
+    client_email = models.EmailField("Почта", blank=True)
     exam_at = models.DateTimeField("Дата и время экзамена", db_index=True)
     university = models.CharField("Вуз", max_length=255, db_index=True)
     subject = models.CharField("Название предмета", max_length=255, db_index=True)
+    program = models.CharField("Направление", max_length=255, blank=True)
     client_source = models.CharField("Откуда клиент", max_length=255, blank=True)
     client_contacts = models.TextField("Контакты клиента", blank=True)
     exam_url = models.URLField("Ссылка на экзамен", max_length=1000, blank=True)
     custom_notify_at = models.DateTimeField("Дополнительное время уведомления", null=True, blank=True)
     external_user_id = models.CharField("ID клиента в Students Life", max_length=80, blank=True, db_index=True)
     external_profile_id = models.CharField("ID профиля в Students Life", max_length=80, blank=True)
+    external_exam_id = models.CharField("ID экзамена в Students Life", max_length=80, blank=True)
+    client_acknowledged_at = models.DateTimeField("Клиент ознакомился", null=True, blank=True)
     notification_recipients = models.ManyToManyField(
         User, verbose_name="Получатели уведомлений", related_name="assigned_exams", blank=True
     )
@@ -93,8 +102,12 @@ class NotificationLog(models.Model):
         THIRTY_MINUTES = "before_30_minutes", "За 30 минут"
         CUSTOM = "custom", "Дополнительное"
         TEST = "test", "Тестовое"
+        SHEET_NEW = "sheet_new", "Новый экзамен из Google Sheets"
+        SHEET_UPDATED = "sheet_updated", "Изменение экзамена в Google Sheets"
+        CLIENT_SEEN = "client_seen", "Клиент ознакомился"
 
     class Status(models.TextChoices):
+        PENDING = "pending", "Ожидает отправки"
         SENT = "sent", "Отправлено"
         FAILED = "failed", "Ошибка"
         SKIPPED = "skipped", "Пропущено"
@@ -107,6 +120,8 @@ class NotificationLog(models.Model):
     success_count = models.PositiveIntegerField(default=0)
     failure_count = models.PositiveIntegerField(default=0)
     error = models.TextField(blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    next_retry_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

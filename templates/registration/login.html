@@ -1,13 +1,14 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Вход — ExamSL{% endblock %}
 {% block content %}
 <div class="auth-page">
   <section class="auth-intro">
-    <a class="brand auth-brand" href="/"><span class="brand-mark">E</span><span>ExamSL</span></a>
+    <a class="brand auth-brand" href="/"><img class="brand-logo" src="{% static 'img/students-life-logo.ico' %}" alt=""><span>ExamSL</span></a>
     <div>
-      <p class="eyebrow">Рабочее пространство менеджера</p>
-      <h1>Экзамены под <em>контролем.</em></h1>
-      <p>Расписание, клиенты, комментарии и точные web‑push напоминания — в одном спокойном интерфейсе.</p>
+      <p class="eyebrow">Сервис Students Life</p>
+      <h1>Экзамены под контролем.</h1>
+      <p>Расписание, клиенты и уведомления менеджеров в едином рабочем пространстве.</p>
     </div>
     <div class="auth-artifact">
       <span>Завтра · 08:00</span><strong>Напомнить менеджерам</strong><small>Автоматически, Asia/Ashgabat</small>
@@ -16,12 +17,12 @@
   <section class="auth-form-wrap">
     <form class="auth-form" method="post">
       {% csrf_token %}
-      <p class="eyebrow">Добро пожаловать</p><h2>Войти в ExamSL</h2><p class="muted">Используйте аккаунт менеджера.</p>
+      <p class="eyebrow">Добро пожаловать</p><h2>Войти в ExamSL</h2><p class="muted">Используйте тот же email и пароль, что на ManagerSL.</p>
       {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
-      <div class="field"><label for="id_username">Логин</label>{{ form.username }}</div>
+      <div class="field"><label for="id_username">Email ManagerSL</label>{{ form.username }}</div>
       <div class="field"><label for="id_password">Пароль</label>{{ form.password }}</div>
       <button class="button button-dark button-block" type="submit">Войти <span>→</span></button>
-      <p class="auth-switch">Нет аккаунта? <a href="{% url 'register' %}">Зарегистрироваться →</a></p>
+      {% if manager_registration_enabled %}<p class="auth-switch">Нет аккаунта? <a href="{% url 'register' %}">Зарегистрироваться →</a></p>{% endif %}
     </form>
   </section>
 </div>

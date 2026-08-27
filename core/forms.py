@@ -1,8 +1,11 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 from .models import Exam, ExamComment
+from .services.manager_auth import ManagerAuthUnavailable, authenticate_manager
 
 
 class DateTimeLocalInput(forms.DateTimeInput):
@@ -32,61 +35,122 @@ class ManagerRegistrationForm(UserCreationForm):
         return user
 
 
-class ExamForm(forms.ModelForm):
-    notify_all_managers = forms.BooleanField(
-        label="Уведомить всех менеджеров",
-        required=False,
-        help_text="Если включено, выбранные получатели ниже не учитываются.",
+class ManagerSLAuthenticationForm(AuthenticationForm):
+    username = forms.EmailField(
+        label="Email ManagerSL",
+        max_length=254,
+        widget=forms.EmailInput(attrs={"autocomplete": "username", "autofocus": True}),
     )
+
+    error_messages = {
+        "invalid_login": "Email или пароль ManagerSL указаны неверно.",
+        "inactive": "Эта учётная запись отключена.",
+    }
+
+    def clean(self):
+        email = str(self.cleaned_data.get("username") or "").strip().lower()
+        password = str(self.cleaned_data.get("password") or "")
+        if not email or not password:
+            return self.cleaned_data
+
+        try:
+            identity = authenticate_manager(email, password)
+        except ManagerAuthUnavailable as exc:
+            raise ValidationError(
+                "ManagerSL временно не отвечает. Повторите вход через минуту.",
+                code="manager_unavailable",
+            ) from exc
+        if not identity:
+            raise self.get_invalid_login_error()
+
+        canonical_email = str(identity.get("email") or identity.get("username") or email).strip().lower()
+        user = User.objects.filter(
+            Q(email__iexact=canonical_email) | Q(username__iexact=canonical_email)
+        ).order_by("pk").first()
+        if user is None:
+            user = User(username=canonical_email, email=canonical_email)
+        elif not User.objects.filter(username__iexact=canonical_email).exclude(pk=user.pk).exists():
+            user.username = canonical_email
+
+        user.email = canonical_email
+        user.first_name = str(identity.get("first_name") or "")[:150]
+        user.last_name = str(identity.get("last_name") or "")[:150]
+        user.is_active = True
+        user.is_staff = bool(identity.get("is_staff"))
+        user.is_superuser = False
+        user.set_unusable_password()
+        user.save()
+        self.user_cache = user
+        self.confirm_login_allowed(user)
+        return self.cleaned_data
+
+
+class ExamForm(forms.ModelForm):
+    client_lookup = forms.ChoiceField(label="Клиент из листа «Общее»", choices=(), required=False)
 
     class Meta:
         model = Exam
         fields = (
+            "client_lookup",
             "client_full_name",
+            "sl_id",
             "client_login",
             "client_password",
             "exam_at",
             "university",
             "subject",
-            "client_source",
-            "client_contacts",
             "exam_url",
-            "custom_notify_at",
-            "external_user_id",
-            "external_profile_id",
             "status",
             "responsible_manager",
             "created_by",
-            "notify_all_managers",
-            "notification_recipients",
         )
         widgets = {
+            "client_full_name": forms.HiddenInput,
+            "sl_id": forms.HiddenInput,
             "exam_at": DateTimeLocalInput(format="%Y-%m-%dT%H:%M"),
-            "custom_notify_at": DateTimeLocalInput(format="%Y-%m-%dT%H:%M"),
-            "client_contacts": forms.Textarea(attrs={"rows": 3}),
-            "notification_recipients": forms.CheckboxSelectMultiple,
             "client_password": forms.TextInput(attrs={"autocomplete": "off"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["exam_at"].input_formats = ["%Y-%m-%dT%H:%M"]
-        self.fields["custom_notify_at"].input_formats = ["%Y-%m-%dT%H:%M"]
-        self.fields["notification_recipients"].queryset = User.objects.filter(is_active=True).order_by(
-            "first_name", "username"
-        )
+        self.fields["client_full_name"].required = False
+        self.fields["sl_id"].required = False
         user_queryset = User.objects.order_by("first_name", "last_name", "username")
         self.fields["responsible_manager"].queryset = user_queryset
         self.fields["created_by"].queryset = user_queryset
+        choices = [("", "Выберите клиента")]
+        self.client_records = {}
+        try:
+            from .services.google_sheets import GoogleSheetsSource, sheets_enabled
+            if sheets_enabled():
+                for row in GoogleSheetsSource().general_clients():
+                    full_name = str(row.get("ФИО абитуриента") or "").strip()
+                    sl_id = str(row.get("Айди") or "").strip()
+                    if not full_name:
+                        continue
+                    key = sl_id or full_name
+                    self.client_records[key] = row
+                    choices.append((key, f"{full_name}{' · ' + sl_id if sl_id else ''}"))
+        except Exception:
+            self.client_records = {}
+        self.fields["client_lookup"].choices = choices
         if self.instance.pk:
-            self.initial["notify_all_managers"] = not self.instance.notification_recipients.exists()
+            current_key = self.instance.sl_id or self.instance.client_full_name
+            if current_key and current_key not in dict(choices):
+                choices.append((current_key, f"{self.instance.client_full_name} · {self.instance.sl_id}".strip(" ·")))
+            self.initial["client_lookup"] = current_key
 
-    def save(self, commit=True):
-        exam = super().save(commit=commit)
-        if commit and self.cleaned_data.get("notify_all_managers"):
-            exam.notification_recipients.clear()
-        return exam
-
+    def clean(self):
+        cleaned = super().clean()
+        key = cleaned.get("client_lookup")
+        row = getattr(self, "client_records", {}).get(key)
+        if row:
+            cleaned["client_full_name"] = str(row.get("ФИО абитуриента") or "").strip()
+            cleaned["sl_id"] = str(row.get("Айди") or "").strip()
+        if not cleaned.get("client_full_name"):
+            self.add_error("client_lookup", "Выберите клиента из листа «Общее».")
+        return cleaned
 
 class ExamInlineForm(forms.ModelForm):
     class Meta:

@@ -4,12 +4,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#1e293b">
   <title>{% block title %}ExamSL{% endblock %}</title>
+  <link rel="icon" href="{% static 'img/students-life-logo.ico' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260826-sl-theme">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -17,18 +18,19 @@
   <header class="site-header">
     <div class="shell nav-wrap">
       <a class="brand" href="{% url 'dashboard' %}" aria-label="ExamSL, на главную">
-        <span class="brand-mark">E</span><span>ExamSL</span>
+        <img class="brand-logo" src="{% static 'img/students-life-logo.ico' %}" alt=""><span>ExamSL</span>
       </a>
       <nav class="desktop-nav" aria-label="Основная навигация">
-        <a class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Обзор</a>
-        <a class="{% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam-list' %}">Экзамены</a>
-        <a class="{% if 'push' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'push-settings' %}">Уведомления</a>
+        <a class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><i data-lucide="layout-dashboard"></i>Обзор</a>
+        <a class="{% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam-list' %}"><i data-lucide="calendar-check-2"></i>Экзамены</a>
+        <a class="{% if 'push' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'push-settings' %}"><i data-lucide="bell-ring"></i>Уведомления</a>
+        <a href="https://manager-sl.ru/" rel="noopener"><i data-lucide="arrow-up-right"></i>ManagerSL</a>
       </nav>
       <div class="nav-actions">
         <button class="search-trigger" type="button" data-search-open aria-label="Открыть поиск">
-          <span aria-hidden="true">⌕</span><span class="search-label">Поиск</span><kbd>⌘ K</kbd>
+          <i data-lucide="search"></i><span class="search-label">Поиск</span><kbd>⌘ K</kbd>
         </button>
-        <a class="button button-dark button-small" href="{% url 'exam-create' %}">+ Экзамен</a>
+        <a class="button button-dark button-small" href="{% url 'exam-create' %}"><i data-lucide="plus"></i>Экзамен</a>
         <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="avatar" title="Выйти">{{ user.first_name|default:user.username|slice:':1'|upper }}</button></form>
       </div>
     </div>
@@ -47,16 +49,18 @@
   <div class="search-modal" data-search-modal hidden>
     <div class="search-backdrop" data-search-close></div>
     <section class="search-panel" role="dialog" aria-modal="true" aria-label="Поиск">
-      <div class="global-search-input"><span>⌕</span><input type="search" data-global-search placeholder="Имя, вуз, предмет, логин, контакт…" autocomplete="off"><button data-search-close>Esc</button></div>
+    <div class="global-search-input"><i data-lucide="search"></i><input type="search" data-global-search placeholder="Имя, вуз, предмет, логин, контакт…" autocomplete="off"><button data-search-close>Esc</button></div>
       <div class="search-results" data-search-results><p class="empty-state">Начните вводить — поиск работает по ExamSL и базе Students Life.</p></div>
     </section>
   </div>
   <nav class="mobile-nav">
-    <a href="{% url 'dashboard' %}">Обзор</a><a href="{% url 'exam-list' %}">Экзамены</a><a href="{% url 'push-settings' %}">Push</a>
+    <a class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><i data-lucide="layout-dashboard"></i><span>Обзор</span></a><a class="{% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam-list' %}"><i data-lucide="calendar-check-2"></i><span>Экзамены</span></a><a class="{% if 'push' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'push-settings' %}"><i data-lucide="bell-ring"></i><span>Push</span></a>
   </nav>
   <script>window.examSL = { searchUrl: "{% url 'quick-search' %}" };</script>
   <script src="{% static 'js/app.js' %}" defer></script>
   {% endif %}
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>window.lucide?.createIcons({attrs:{'stroke-width':1.8}}));</script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
